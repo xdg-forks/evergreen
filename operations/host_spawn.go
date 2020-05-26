@@ -34,6 +34,7 @@ func hostCreate() cli.Command {
 		tagFlagName          = "tag"
 		instanceTypeFlagName = "type"
 		noExpireFlagName     = "no-expire"
+		fileFlagName         = "file"
 	)
 
 	return cli.Command{
@@ -68,6 +69,10 @@ func hostCreate() cli.Command {
 				Name:  noExpireFlagName,
 				Usage: "make host never expire",
 			},
+			cli.StringFlag{
+				Name:  joinFlagNames(fileFlagName, "f"),
+				Usage: "name of a file containing the span host params",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			confPath := c.Parent().Parent().String(confFlagName)
@@ -78,6 +83,7 @@ func hostCreate() cli.Command {
 			instanceType := c.String(instanceTypeFlagName)
 			region := c.String(regionFlagName)
 			noExpire := c.Bool(noExpireFlagName)
+			file := c.String(fileFlagName)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -103,15 +109,23 @@ func hostCreate() cli.Command {
 			if err != nil {
 				return errors.Wrap(err, "problem generating tags")
 			}
+			spawnRequest := &restModel.HostRequestOptions{}
 
-			spawnRequest := &restModel.HostRequestOptions{
-				DistroID:     distro,
-				KeyName:      key,
-				UserData:     script,
-				InstanceTags: tags,
-				InstanceType: instanceType,
-				Region:       region,
-				NoExpiration: noExpire,
+			if file != "" {
+				err = utility.ReadYAMLFile(file, &spawnRequest)
+				if err != nil {
+					return errors.Wrapf(err, "problem reading from file '%s'", file)
+				}
+			} else {
+				spawnRequest = &restModel.HostRequestOptions{
+					DistroID:     distro,
+					KeyName:      key,
+					UserData:     script,
+					InstanceTags: tags,
+					InstanceType: instanceType,
+					Region:       region,
+					NoExpiration: noExpire,
+				}
 			}
 
 			host, err := client.CreateSpawnHost(ctx, spawnRequest)
